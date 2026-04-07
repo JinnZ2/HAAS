@@ -2,6 +2,15 @@
 
 __version__ = "0.1.0"
 
+from .audit import (
+    Audit,
+    Maturity,
+    ThreatAssessment,
+    blank_questionnaire,
+    create_audit,
+    create_audit_from_responses,
+    overall_rating,
+)
 from .control import apply_control, check_alerts, control_decision
 from .dashboard import DashboardSnapshot, format_dashboard, show_summary
 from .entities import AIController, Human, Machine
@@ -39,6 +48,7 @@ from .zones import Zone, ZoneLevel, ZoneMap
 
 __all__ = [
     "AIController",
+    "Audit",
     "DashboardSnapshot",
     "Entity",
     "EventLog",
@@ -47,6 +57,7 @@ __all__ = [
     "FMEAEntry",
     "Human",
     "Machine",
+    "Maturity",
     "ProtectionState",
     "Severity",
     "SimConfig",
@@ -56,10 +67,14 @@ __all__ = [
     "THREAT_REGISTRY",
     "TelemetryFrame",
     "Threat",
+    "ThreatAssessment",
     "Violation",
     "Zone",
     "ZoneLevel",
     "ZoneMap",
+    "blank_questionnaire",
+    "create_audit",
+    "create_audit_from_responses",
     "apply_control",
     "check_alerts",
     "check_handshake_requirement",
@@ -75,6 +90,7 @@ __all__ = [
     "get_threats_for",
     "get_threats_from",
     "get_threats_targeting",
+    "overall_rating",
     "inject_failures",
     "run_basic_simulation",
     "run_failure_simulation",
