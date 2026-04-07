@@ -9,6 +9,7 @@ import numpy as np
 
 from .control import apply_control, check_alerts, control_decision
 from .dashboard import DashboardSnapshot, print_dashboard
+from .energy import HumanEnergyState
 from .entities import AIController, Human, Machine
 from .event_log import EventLog
 from .failures import SystemState, detect_failures, inject_failures
@@ -113,6 +114,7 @@ class SimResult:
     machine: Machine
     snapshots: list[DashboardSnapshot] = field(default_factory=list)
     all_violations: list[Violation] = field(default_factory=list)
+    energy: HumanEnergyState | None = None
 
 
 def unified_step(
@@ -127,15 +129,31 @@ def unified_step(
     store: EventStore | None = None,
     pstate: ProtectionState | None = None,
     institutional_friction: float = 0.0,
+    energy_state: HumanEnergyState | None = None,
 ) -> DashboardSnapshot:
-    """Run one unified step: spatial risk + failure injection + zones + protections + logging."""
+    """Run one unified step: spatial risk + failure injection + zones + energy + protections + logging."""
     ts = time.time()
 
     # 1. Failure injection (degrades state over time)
     inject_failures(state)
 
-    # 2. Compute real spatial risk
-    risk = compute_risk(human, machine)
+    # 1b. Update human energy state (TAF integration)
+    fatigue = 0.0
+    if energy_state is not None:
+        # Map HAAS state to TAF energy variables
+        hidden_count = int(state.sensor_noise * 10)  # sensor noise → hidden variables
+        auto_reliability = max(0.1, state.brake_efficiency)  # brake eff → automation reliability
+        energy_state.update(
+            hidden_count=hidden_count,
+            automation_count=1,
+            automation_reliability=auto_reliability,
+            alert_count=0,  # updated after alerts are computed
+            friction_events=1 if institutional_friction > 5.0 else 0,
+        )
+        fatigue = energy_state.fatigue_score
+
+    # 2. Compute real spatial risk (fatigue amplifies risk)
+    risk = compute_risk(human, machine, fatigue_score=fatigue)
 
     # 3. Effective confidence after sensor degradation
     confidence = compute_confidence(state.confidence, state.sensor_noise)
@@ -188,7 +206,14 @@ def unified_step(
         drift_index=state.sensor_noise,
     )
 
-    # 11b. Protection matrix evaluation
+    # 11b. Feed alert count to energy state (AI-tax accounting)
+    if energy_state is not None and len(alerts) > 0:
+        energy_state.false_alert_total += len(alerts)
+        from .energy import ghost_friction_cost
+        gf = ghost_friction_cost(len(alerts))
+        energy_state.cumulative_ai_tax += gf["total_ai_tax"]
+
+    # 11c. Protection matrix evaluation
     violations: list[Violation] = []
     violation_strs: list[str] = []
     if pstate is not None:
@@ -201,6 +226,13 @@ def unified_step(
             pstate.stop_count_recent += 1
         if risk > 0.7 and decision not in ("STOP", "stop"):
             pstate.near_miss_count_recent += 1
+
+        # Sync energy state into protection state
+        if energy_state is not None:
+            pstate.fatigue_score = energy_state.fatigue_score
+            pstate.collapse_distance = energy_state.collapse_distance
+            pstate.cumulative_ai_tax = energy_state.cumulative_ai_tax
+            pstate.energy_debt = energy_state.cumulative_friction_cost
 
         violations = evaluate_protections(
             risk=risk,
@@ -277,6 +309,8 @@ def unified_step(
         machine_pos=machine.position.tolist(),
         alerts=alerts,
         violations=violation_strs,
+        fatigue_score=energy_state.fatigue_score if energy_state else 0.0,
+        collapse_distance=energy_state.collapse_distance if energy_state else 1.0,
     )
     return snap, violations
 
@@ -300,6 +334,7 @@ def run_unified_simulation(
     state = SystemState()
     log = EventLog()
     pstate = ProtectionState()
+    energy = HumanEnergyState()
     snapshots: list[DashboardSnapshot] = []
     all_violations: list[Violation] = []
 
@@ -316,6 +351,7 @@ def run_unified_simulation(
             store=cfg.store,
             pstate=pstate,
             institutional_friction=institutional_friction,
+            energy_state=energy,
         )
         snapshots.append(snap)
         all_violations.extend(violations)
@@ -327,4 +363,5 @@ def run_unified_simulation(
     return SimResult(
         log=log, state=state, human=h, machine=m,
         snapshots=snapshots, all_violations=all_violations,
+        energy=energy,
     )

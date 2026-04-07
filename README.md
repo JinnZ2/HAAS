@@ -58,15 +58,18 @@ with EventStore("session.db") as store:
 ```
 src/haas/
 ├── entities.py      # Human, Machine, AIController dataclasses
-├── risk.py          # Dynamic risk computation
+├── risk.py          # Dynamic risk computation (fatigue-amplified)
 ├── control.py       # Multi-layer control decisions and alerts
 ├── zones.py         # Green/yellow/red geofencing with speed limits
 ├── failures.py      # Failure injection, detection, FMEA data
+├── energy.py        # TAF integration — fatigue, collapse, AI-tax, parasitic debt
+├── protections.py   # Protection matrix — every entity protected from every other
+├── audit.py         # Internal compliance audit against protection matrix
 ├── telemetry.py     # Sovereign Black Box — immutable logging
-├── store.py         # SQLite persistence (events, signals, system state)
+├── store.py         # SQLite persistence (events, signals, state, violations)
 ├── handshake.py     # FELTSensor handshake protocol
 ├── event_log.py     # In-memory event log for feedback loops
-├── dashboard.py     # Terminal dashboard with color-coded risk/confidence bars
+├── dashboard.py     # Terminal dashboard with risk/confidence/fatigue bars
 └── simulation.py    # Basic, failure-aware, and unified simulation runners
 ```
 
@@ -76,7 +79,11 @@ src/haas/
 pytest
 ```
 
-72 tests covering all modules.
+148 tests covering all modules.
+
+## Companion Project
+
+The **[Thermodynamic Accountability Framework](https://github.com/JinnZ2/thermodynamic-accountability-framework)** provides the energy/physics foundation. HAAS-Q models the control environment; TAF models the energy consequences on the organisms inside it. The `energy.py` module bridges them — porting TAF's fatigue model, collapse thresholds, ghost-friction accounting, and parasitic energy debt into HAAS-Q's simulation loop.
 
 ## Framework Specification
 

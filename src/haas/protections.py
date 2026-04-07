@@ -70,6 +70,10 @@ THREAT_REGISTRY: list[Threat] = [
     Threat("H_AI_3", Entity.HUMAN, Entity.AI,
            "Cognitive overload", "AI exposes too much raw data to operator",
            "Decision latency increase in human response", "Graded information display"),
+    Threat("H_AI_4", Entity.HUMAN, Entity.AI,
+           "Ghost-friction / AI-tax", "False alerts impose cumulative metabolic and cognitive cost",
+           "Alert rate + operator fatigue trend",
+           "Ghost-friction accounting + alert rate limiting"),
 
     # ---- Human ← Automation ----
     Threat("H_AUT_1", Entity.HUMAN, Entity.AUTOMATION,
@@ -89,6 +93,10 @@ THREAT_REGISTRY: list[Threat] = [
     Threat("H_INS_3", Entity.HUMAN, Entity.INSTITUTION,
            "Fatigue pressure", "Scheduling forces operation beyond safe limits",
            "Shift length + human entropy indicators", "Bio-kinetic state monitoring"),
+    Threat("H_INS_4", Entity.HUMAN, Entity.INSTITUTION,
+           "Energy collapse ignored", "Operator energy budget exceeded without intervention",
+           "Distance-to-collapse < 0.2 with no stand-down",
+           "Mandatory stand-down at safety breakdown threshold"),
 
     # ---- Human ← Company ----
     Threat("H_COM_1", Entity.HUMAN, Entity.COMPANY,
@@ -97,6 +105,10 @@ THREAT_REGISTRY: list[Threat] = [
     Threat("H_COM_2", Entity.HUMAN, Entity.COMPANY,
            "Understaffing", "Insufficient operators for safe coverage",
            "Operator-to-machine ratio below threshold", "Minimum staffing interlock"),
+    Threat("H_COM_3", Entity.HUMAN, Entity.COMPANY,
+           "Parasitic energy extraction", "Uncompensated labor draining operator reserves",
+           "Energy debt accumulating without replenishment",
+           "Energy budget tracking + parasitic load accounting"),
 
     # ---- AI ← Human ----
     Threat("AI_H_1", Entity.AI, Entity.HUMAN,
@@ -245,6 +257,12 @@ class ProtectionState:
     decision_log_gaps: int = 0             # missing log entries
     last_decision: str = ""
 
+    # TAF energy integration
+    fatigue_score: float = 0.0
+    collapse_distance: float = 1.0
+    cumulative_ai_tax: float = 0.0
+    energy_debt: float = 0.0
+
 
 def evaluate_protections(
     risk: float,
@@ -300,6 +318,30 @@ def evaluate_protections(
             "H_INS_1", Entity.HUMAN, Entity.INSTITUTION, Severity.WARNING,
             "Institutional friction score dangerously high",
             {"institutional_friction": institutional_friction},
+        ))
+
+    # H_AI_4: Ghost-friction / AI-tax
+    if pstate.cumulative_ai_tax > 5.0:
+        violations.append(Violation(
+            "H_AI_4", Entity.HUMAN, Entity.AI, Severity.WARNING,
+            "Cumulative AI-tax degrading operator energy budget",
+            {"cumulative_ai_tax": pstate.cumulative_ai_tax},
+        ))
+
+    # H_INS_4: Energy collapse ignored
+    if pstate.collapse_distance < 0.2:
+        violations.append(Violation(
+            "H_INS_4", Entity.HUMAN, Entity.INSTITUTION, Severity.CRITICAL,
+            "Operator near energy collapse — distance-to-collapse critically low",
+            {"collapse_distance": pstate.collapse_distance, "fatigue": pstate.fatigue_score},
+        ))
+
+    # H_COM_3: Parasitic energy extraction
+    if pstate.energy_debt > 3.0:
+        violations.append(Violation(
+            "H_COM_3", Entity.HUMAN, Entity.COMPANY, Severity.WARNING,
+            "Parasitic energy debt accumulating without replenishment",
+            {"energy_debt": pstate.energy_debt},
         ))
 
     # H_COM_1: Throughput over safety

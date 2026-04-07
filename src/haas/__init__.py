@@ -12,6 +12,15 @@ from .audit import (
     overall_rating,
 )
 from .control import apply_control, check_alerts, control_decision
+from .energy import (
+    HumanEnergyState,
+    compute_fatigue,
+    collapse_flags,
+    distance_to_collapse,
+    ghost_friction_cost,
+    long_tail_risk,
+    parasitic_energy_debt,
+)
 from .dashboard import DashboardSnapshot, format_dashboard, show_summary
 from .entities import AIController, Human, Machine
 from .event_log import EventLog
@@ -56,6 +65,7 @@ __all__ = [
     "FMEA_TABLE",
     "FMEAEntry",
     "Human",
+    "HumanEnergyState",
     "Machine",
     "Maturity",
     "ProtectionState",
@@ -73,6 +83,8 @@ __all__ = [
     "ZoneLevel",
     "ZoneMap",
     "blank_questionnaire",
+    "collapse_flags",
+    "compute_fatigue",
     "create_audit",
     "create_audit_from_responses",
     "apply_control",
@@ -83,6 +95,7 @@ __all__ = [
     "control_decision",
     "create_telemetry_frame",
     "detect_failures",
+    "distance_to_collapse",
     "evaluate_protections",
     "format_dashboard",
     "format_violation",
@@ -90,8 +103,11 @@ __all__ = [
     "get_threats_for",
     "get_threats_from",
     "get_threats_targeting",
+    "ghost_friction_cost",
     "overall_rating",
     "inject_failures",
+    "long_tail_risk",
+    "parasitic_energy_debt",
     "run_basic_simulation",
     "run_failure_simulation",
     "run_unified_simulation",

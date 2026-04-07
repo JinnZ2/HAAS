@@ -38,6 +38,8 @@ class DashboardSnapshot:
     machine_pos: list[float]
     alerts: list[str]
     violations: list[str] = field(default_factory=list)  # formatted violation strings
+    fatigue_score: float = 0.0
+    collapse_distance: float = 1.0
 
     @property
     def risk_bar(self) -> str:
@@ -45,6 +47,17 @@ class DashboardSnapshot:
         if self.risk > RISK_CRITICAL:
             color = _RED
         elif self.risk > RISK_WARNING:
+            color = _YELLOW
+        else:
+            color = _GREEN
+        return f"{color}{'█' * filled}{'░' * (20 - filled)}{_RESET}"
+
+    @property
+    def fatigue_bar(self) -> str:
+        filled = int(self.fatigue_score * 2)  # 0-10 scale → 0-20 bar
+        if self.fatigue_score > 7:
+            color = _RED
+        elif self.fatigue_score > 4:
             color = _YELLOW
         else:
             color = _GREEN
@@ -78,6 +91,8 @@ def format_dashboard(snap: DashboardSnapshot) -> str:
         "",
         f"  Risk:       {snap.risk_bar} {snap.risk:.3f}",
         f"  Confidence: {snap.confidence_bar} {snap.confidence:.3f}",
+        f"  Fatigue:    {snap.fatigue_bar} {snap.fatigue_score:.1f}/10"
+        f"  (collapse dist: {snap.collapse_distance:.2f})",
         f"  Decision:   {dc}{_BOLD}{snap.decision}{_RESET}",
         f"  Zone:       {snap.zone}",
         "",
