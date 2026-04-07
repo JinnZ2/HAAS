@@ -12,6 +12,7 @@ from .dashboard import DashboardSnapshot, print_dashboard
 from .entities import AIController, Human, Machine
 from .event_log import EventLog
 from .failures import SystemState, detect_failures, inject_failures
+from .protections import ProtectionState, Violation, evaluate_protections, format_violation
 from .risk import compute_confidence, compute_risk
 from .store import EventStore
 from .zones import ZoneLevel, ZoneMap
@@ -111,6 +112,7 @@ class SimResult:
     human: Human
     machine: Machine
     snapshots: list[DashboardSnapshot] = field(default_factory=list)
+    all_violations: list[Violation] = field(default_factory=list)
 
 
 def unified_step(
@@ -123,8 +125,10 @@ def unified_step(
     step: int,
     dt: float = 0.1,
     store: EventStore | None = None,
+    pstate: ProtectionState | None = None,
+    institutional_friction: float = 0.0,
 ) -> DashboardSnapshot:
-    """Run one unified step: spatial risk + failure injection + zones + logging."""
+    """Run one unified step: spatial risk + failure injection + zones + protections + logging."""
     ts = time.time()
 
     # 1. Failure injection (degrades state over time)
@@ -184,6 +188,33 @@ def unified_step(
         drift_index=state.sensor_noise,
     )
 
+    # 11b. Protection matrix evaluation
+    violations: list[Violation] = []
+    violation_strs: list[str] = []
+    if pstate is not None:
+        proximity = float(np.linalg.norm(human.position - machine.position))
+        machine_speed = float(np.linalg.norm(machine.velocity))
+
+        # Update rolling counters
+        pstate.alert_count_recent += len(alerts)
+        if decision in ("STOP", "stop"):
+            pstate.stop_count_recent += 1
+        if risk > 0.7 and decision not in ("STOP", "stop"):
+            pstate.near_miss_count_recent += 1
+
+        violations = evaluate_protections(
+            risk=risk,
+            confidence=confidence,
+            decision=decision,
+            brake_efficiency=state.brake_efficiency,
+            sensor_noise=state.sensor_noise,
+            proximity=proximity,
+            velocity=machine_speed,
+            institutional_friction=institutional_friction,
+            pstate=pstate,
+        )
+        violation_strs = [format_violation(v) for v in violations]
+
     # 12. Log
     log.log({
         "risk": risk,
@@ -194,6 +225,7 @@ def unified_step(
         "human_pos": human.position.tolist(),
         "machine_pos": machine.position.tolist(),
         "alerts": alerts,
+        "violations": [v.threat_id for v in violations],
     })
 
     state.logs.append({
@@ -220,6 +252,16 @@ def unified_step(
             brake_efficiency=state.brake_efficiency,
             timestamp=ts,
         )
+        for v in violations:
+            store.record_violation(
+                threat_id=v.threat_id,
+                target=v.target.value,
+                source=v.source.value,
+                severity=v.severity.value,
+                description=v.description,
+                values=v.values,
+                timestamp=ts,
+            )
 
     # 14. Build snapshot
     snap = DashboardSnapshot(
@@ -234,8 +276,9 @@ def unified_step(
         human_pos=human.position.tolist(),
         machine_pos=machine.position.tolist(),
         alerts=alerts,
+        violations=violation_strs,
     )
-    return snap
+    return snap, violations
 
 
 def run_unified_simulation(
@@ -243,8 +286,9 @@ def run_unified_simulation(
     zone_map: ZoneMap | None = None,
     human: Human | None = None,
     machine: Machine | None = None,
+    institutional_friction: float = 0.0,
 ) -> SimResult:
-    """Run a unified simulation combining spatial, failure, and zone logic.
+    """Run a unified simulation combining spatial, failure, zone, and protection logic.
 
     Optionally displays a live terminal dashboard and persists to SQLite.
     """
@@ -255,10 +299,12 @@ def run_unified_simulation(
     ai = AIController(confidence=0.9, decision="move")
     state = SystemState()
     log = EventLog()
+    pstate = ProtectionState()
     snapshots: list[DashboardSnapshot] = []
+    all_violations: list[Violation] = []
 
     for step in range(cfg.steps):
-        snap = unified_step(
+        snap, violations = unified_step(
             human=h,
             machine=m,
             ai=ai,
@@ -268,11 +314,17 @@ def run_unified_simulation(
             step=step,
             dt=cfg.dt,
             store=cfg.store,
+            pstate=pstate,
+            institutional_friction=institutional_friction,
         )
         snapshots.append(snap)
+        all_violations.extend(violations)
 
         if cfg.enable_dashboard:
             print_dashboard(snap)
             time.sleep(cfg.dashboard_delay)
 
-    return SimResult(log=log, state=state, human=h, machine=m, snapshots=snapshots)
+    return SimResult(
+        log=log, state=state, human=h, machine=m,
+        snapshots=snapshots, all_violations=all_violations,
+    )

@@ -18,10 +18,11 @@ HAAS/
 │   ├── telemetry.py     # Sovereign Black Box — immutable telemetry logging
 │   ├── store.py         # SQLite persistence (events, signals, system_state tables)
 │   ├── handshake.py     # FELTSensor handshake / micro-clarification protocol
+│   ├── protections.py   # Protection matrix — every entity protected from every other
 │   ├── event_log.py     # In-memory append-only event log
 │   ├── dashboard.py     # Terminal dashboard with ANSI color bars and session summary
 │   └── simulation.py    # Basic, failure-aware, and unified simulation runners
-├── tests/               # pytest test suite (72 tests)
+├── tests/               # pytest test suite (94 tests)
 ├── Framework.md         # Full framework specification (~1250 lines)
 ├── pyproject.toml       # Package config (setuptools, numpy dep, pytest)
 ├── LICENSE              # CC0 1.0 Universal
@@ -32,7 +33,7 @@ HAAS/
 
 ```bash
 pip install -e ".[dev]"       # Install with dev dependencies
-pytest                        # Run all 72 tests
+pytest                        # Run all 94 tests
 pytest tests/test_zones.py -v # Run a specific test file
 ```
 
@@ -41,7 +42,7 @@ pytest tests/test_zones.py -v # Run a specific test file
 The package follows a layered dependency graph with no circular imports:
 
 ```
-entities.py, event_log.py, failures.py, telemetry.py, handshake.py, zones.py, store.py
+entities.py, event_log.py, failures.py, telemetry.py, handshake.py, zones.py, store.py, protections.py
     ↑
 risk.py, control.py  (depend on entities)
     ↑
@@ -62,6 +63,10 @@ The unified simulation runs: failure injection -> spatial risk -> zone classific
 
 Three levels with strict priority: RED (full stop) > YELLOW (half speed) > GREEN (normal). Zones are axis-aligned rectangles. The most restrictive zone containing either the human or machine position wins.
 
+### Protection Matrix
+
+Five entities — Human, AI, Automation, Institution, Company — each protected from every other. The `THREAT_REGISTRY` defines 30+ directional threats across all 20 entity pairs, each with mechanism, observable signal, and control strategy. `evaluate_protections()` runs every simulation step, producing `Violation` objects with severity levels. Violations are persisted to SQLite and rendered on the dashboard.
+
 ### Persistent Storage
 
 SQLite with three tables matching the Framework.md spec:
@@ -70,6 +75,7 @@ SQLite with three tables matching the Framework.md spec:
 - `system_state` — mode, active controller, sensor noise, brake efficiency
 
 Query helpers: `near_miss_count()`, `override_count()`, `average_risk()`.
+Plus `violations` table with `violation_count()`, `violations_by_target()`, `violations_by_pair()`.
 
 ## Key Concepts
 

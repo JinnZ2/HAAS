@@ -41,6 +41,17 @@ CREATE TABLE IF NOT EXISTS system_state (
     sensor_noise REAL,
     brake_efficiency REAL
 );
+
+CREATE TABLE IF NOT EXISTS violations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp REAL NOT NULL,
+    threat_id TEXT NOT NULL,
+    target TEXT NOT NULL,
+    source TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    description TEXT,
+    values_json TEXT
+);
 """
 
 
@@ -198,3 +209,55 @@ class EventStore:
             (last_n,),
         ).fetchone()
         return row[0]
+
+    # ---- Violations ----
+
+    def record_violation(
+        self,
+        threat_id: str,
+        target: str,
+        source: str,
+        severity: str,
+        description: str,
+        values: dict | None = None,
+        timestamp: float | None = None,
+    ) -> int:
+        ts = timestamp or time.time()
+        cur = self._conn.execute(
+            "INSERT INTO violations (timestamp, threat_id, target, source, "
+            "severity, description, values_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (ts, threat_id, target, source, severity, description,
+             json.dumps(values) if values else None),
+        )
+        self._conn.commit()
+        return cur.lastrowid  # type: ignore[return-value]
+
+    def get_violations(self, limit: int = 100) -> list[dict]:
+        rows = self._conn.execute(
+            "SELECT * FROM violations ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def violation_count(self, severity: str | None = None) -> int:
+        if severity:
+            row = self._conn.execute(
+                "SELECT COUNT(*) FROM violations WHERE severity = ?", (severity,)
+            ).fetchone()
+        else:
+            row = self._conn.execute("SELECT COUNT(*) FROM violations").fetchone()
+        return row[0]
+
+    def violations_by_target(self) -> dict[str, int]:
+        """Count violations grouped by target entity."""
+        rows = self._conn.execute(
+            "SELECT target, COUNT(*) as cnt FROM violations GROUP BY target"
+        ).fetchall()
+        return {row["target"]: row["cnt"] for row in rows}
+
+    def violations_by_pair(self) -> dict[str, int]:
+        """Count violations grouped by target <- source pair."""
+        rows = self._conn.execute(
+            "SELECT target || ' <- ' || source as pair, COUNT(*) as cnt "
+            "FROM violations GROUP BY pair"
+        ).fetchall()
+        return {row["pair"]: row["cnt"] for row in rows}

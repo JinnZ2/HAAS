@@ -2,7 +2,7 @@
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .store import EventStore
 
@@ -37,6 +37,7 @@ class DashboardSnapshot:
     human_pos: list[float]
     machine_pos: list[float]
     alerts: list[str]
+    violations: list[str] = field(default_factory=list)  # formatted violation strings
 
     @property
     def risk_bar(self) -> str:
@@ -87,8 +88,15 @@ def format_dashboard(snap: DashboardSnapshot) -> str:
         "",
         f"  Signals:    {signal_str}",
         f"  Alerts:     {alert_str}",
-        f"{_BOLD}{'═' * 35}{_RESET}",
     ]
+
+    if snap.violations:
+        lines.append("")
+        lines.append(f"  {_BOLD}Protection Violations:{_RESET}")
+        for v in snap.violations:
+            lines.append(f"    {_RED}{v}{_RESET}")
+
+    lines.append(f"{_BOLD}{'═' * 35}{_RESET}")
     return "\n".join(lines)
 
 
@@ -108,6 +116,10 @@ def show_summary(store: EventStore, last_n: int = 50) -> str:
     overrides = store.override_count()
     latest = store.get_latest_state()
 
+    v_total = store.violation_count()
+    v_critical = store.violation_count("critical")
+    v_by_target = store.violations_by_target()
+
     lines = [
         f"{_BOLD}═══ HAAS-Q Session Summary ═══{_RESET}",
         f"  Total events:  {total}",
@@ -119,5 +131,12 @@ def show_summary(store: EventStore, last_n: int = 50) -> str:
         lines.append(f"  Last mode:     {latest['mode']}")
         lines.append(f"  Sensor noise:  {latest['sensor_noise']:.2f}")
         lines.append(f"  Brake eff:     {latest['brake_efficiency']:.2f}")
+
+    lines.append("")
+    lines.append(f"  {_BOLD}Protection Violations:{_RESET}  {v_total} total, {v_critical} critical")
+    if v_by_target:
+        for target, count in sorted(v_by_target.items()):
+            lines.append(f"    {target}: {count}")
+
     lines.append(f"{_BOLD}{'═' * 35}{_RESET}")
     return "\n".join(lines)
