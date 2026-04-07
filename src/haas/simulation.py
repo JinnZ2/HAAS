@@ -1,19 +1,24 @@
-"""Simulation runners — basic and failure-aware modes."""
+"""Simulation runners — basic, failure-aware, and unified modes."""
 
 import random
+import time
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
-from .control import apply_control, control_decision
+from .control import apply_control, check_alerts, control_decision
+from .dashboard import DashboardSnapshot, print_dashboard
 from .entities import AIController, Human, Machine
 from .event_log import EventLog
 from .failures import SystemState, detect_failures, inject_failures
 from .risk import compute_confidence, compute_risk
+from .store import EventStore
+from .zones import ZoneLevel, ZoneMap
 
 
 # ------------------------------------
-# Basic Simulation
+# Basic Simulation (preserved)
 # ------------------------------------
 
 def simulate_step(
@@ -49,11 +54,11 @@ def run_basic_simulation(steps: int = 20) -> EventLog:
 
 
 # ------------------------------------
-# Failure-Aware Simulation
+# Failure-Aware Simulation (preserved)
 # ------------------------------------
 
 def simulate_failure_step(state: SystemState) -> dict[str, Any]:
-    """Run one step of the failure-aware simulation."""
+    """Run one step of the failure-aware simulation (random risk, no spatial)."""
     inject_failures(state)
 
     risk = random.uniform(0, 1)
@@ -78,3 +83,196 @@ def run_failure_simulation(steps: int = 50) -> SystemState:
     for _ in range(steps):
         simulate_failure_step(state)
     return state
+
+
+# ------------------------------------
+# Unified Simulation
+# ------------------------------------
+
+@dataclass
+class SimConfig:
+    """Configuration for a unified simulation run."""
+
+    steps: int = 100
+    dt: float = 0.1
+    enable_failures: bool = True
+    enable_zones: bool = True
+    enable_dashboard: bool = False
+    dashboard_delay: float = 0.15
+    store: EventStore | None = None
+
+
+@dataclass
+class SimResult:
+    """Full result from a unified simulation run."""
+
+    log: EventLog
+    state: SystemState
+    human: Human
+    machine: Machine
+    snapshots: list[DashboardSnapshot] = field(default_factory=list)
+
+
+def unified_step(
+    human: Human,
+    machine: Machine,
+    ai: AIController,
+    state: SystemState,
+    zone_map: ZoneMap | None,
+    log: EventLog,
+    step: int,
+    dt: float = 0.1,
+    store: EventStore | None = None,
+) -> DashboardSnapshot:
+    """Run one unified step: spatial risk + failure injection + zones + logging."""
+    ts = time.time()
+
+    # 1. Failure injection (degrades state over time)
+    inject_failures(state)
+
+    # 2. Compute real spatial risk
+    risk = compute_risk(human, machine)
+
+    # 3. Effective confidence after sensor degradation
+    confidence = compute_confidence(state.confidence, state.sensor_noise)
+    ai.confidence = confidence
+
+    # 4. Zone classification
+    zone_level = ZoneLevel.GREEN
+    zone_str = "GREEN"
+    if zone_map is not None:
+        machine_zone = zone_map.classify(machine.position)
+        human_zone = zone_map.classify(human.position)
+        # Use the most restrictive of the two
+        zone_level = max(machine_zone, human_zone, key=lambda z: {
+            ZoneLevel.GREEN: 0, ZoneLevel.YELLOW: 1, ZoneLevel.RED: 2
+        }[z])
+        zone_str = zone_level.value.upper()
+
+    # 5. Failure signals
+    signals = detect_failures(state, confidence, risk)
+
+    # 6. Control decision (failure-aware)
+    decision = control_decision(confidence, risk, signals)
+
+    # 7. Zone override — RED zone forces STOP regardless
+    if zone_level == ZoneLevel.RED:
+        decision = "STOP"
+    elif zone_level == ZoneLevel.YELLOW and decision == "MOVE":
+        decision = "SLOW"
+
+    # 8. Apply control to machine
+    apply_control(machine, decision.lower())
+
+    # 9. Zone speed limit enforcement
+    if zone_map is not None:
+        speed_mult = zone_map.speed_limit(machine.position)
+        current_speed = float(np.linalg.norm(machine.velocity))
+        if current_speed > machine.max_speed * speed_mult and speed_mult > 0:
+            scale = (machine.max_speed * speed_mult) / current_speed
+            machine.velocity = machine.velocity * scale
+
+    # 10. Move entities
+    machine.position = machine.position + machine.velocity * dt
+    human.position = human.position + human.velocity * dt
+
+    # 11. Alerts
+    alerts = check_alerts(
+        risk=risk,
+        confidence=confidence,
+        override_count=state.override_count,
+        drift_index=state.sensor_noise,
+    )
+
+    # 12. Log
+    log.log({
+        "risk": risk,
+        "confidence": confidence,
+        "decision": decision,
+        "zone": zone_str,
+        "signals": signals,
+        "human_pos": human.position.tolist(),
+        "machine_pos": machine.position.tolist(),
+        "alerts": alerts,
+    })
+
+    state.logs.append({
+        "risk": risk,
+        "confidence": confidence,
+        "signals": signals,
+        "decision": decision,
+    })
+
+    # 13. Persistent store
+    if store is not None:
+        store.record_event(
+            risk=risk,
+            confidence=confidence,
+            decision=decision,
+            zone=zone_str,
+            human_pos=human.position.tolist(),
+            machine_pos=machine.position.tolist(),
+        )
+        store.record_signals(signals, timestamp=ts)
+        store.record_state(
+            mode=decision,
+            sensor_noise=state.sensor_noise,
+            brake_efficiency=state.brake_efficiency,
+            timestamp=ts,
+        )
+
+    # 14. Build snapshot
+    snap = DashboardSnapshot(
+        step=step,
+        risk=risk,
+        confidence=confidence,
+        decision=decision,
+        zone=zone_str,
+        signals=signals,
+        sensor_noise=state.sensor_noise,
+        brake_efficiency=state.brake_efficiency,
+        human_pos=human.position.tolist(),
+        machine_pos=machine.position.tolist(),
+        alerts=alerts,
+    )
+    return snap
+
+
+def run_unified_simulation(
+    config: SimConfig | None = None,
+    zone_map: ZoneMap | None = None,
+    human: Human | None = None,
+    machine: Machine | None = None,
+) -> SimResult:
+    """Run a unified simulation combining spatial, failure, and zone logic.
+
+    Optionally displays a live terminal dashboard and persists to SQLite.
+    """
+    cfg = config or SimConfig()
+
+    h = human or Human("H1", np.array([0.0, 0.0]), np.array([0.1, 0.0]))
+    m = machine or Machine("F1", np.array([5.0, 0.0]), np.array([-0.5, 0.0]), max_speed=1.0)
+    ai = AIController(confidence=0.9, decision="move")
+    state = SystemState()
+    log = EventLog()
+    snapshots: list[DashboardSnapshot] = []
+
+    for step in range(cfg.steps):
+        snap = unified_step(
+            human=h,
+            machine=m,
+            ai=ai,
+            state=state,
+            zone_map=zone_map if cfg.enable_zones else None,
+            log=log,
+            step=step,
+            dt=cfg.dt,
+            store=cfg.store,
+        )
+        snapshots.append(snap)
+
+        if cfg.enable_dashboard:
+            print_dashboard(snap)
+            time.sleep(cfg.dashboard_delay)
+
+    return SimResult(log=log, state=state, human=h, machine=m, snapshots=snapshots)

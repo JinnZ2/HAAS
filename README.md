@@ -27,17 +27,30 @@ pip install -e ".[dev]"
 ## Quick Start
 
 ```python
-from haas import run_basic_simulation, run_failure_simulation
+import numpy as np
+from haas import (
+    run_unified_simulation, SimConfig, EventStore,
+    Zone, ZoneLevel, ZoneMap, show_summary,
+)
 
-# Basic control loop simulation
-log = run_basic_simulation(steps=20)
-for entry in log.events:
-    print(entry["event"]["decision"], entry["event"]["risk"])
+# Define facility zones
+zone_map = ZoneMap([
+    Zone("floor", ZoneLevel.GREEN, np.array([-10.0, -10.0]), np.array([20.0, 20.0])),
+    Zone("aisle", ZoneLevel.YELLOW, np.array([2.0, -1.0]), np.array([2.0, 2.0])),
+    Zone("dock", ZoneLevel.RED, np.array([0.0, -1.0]), np.array([1.0, 2.0])),
+])
 
-# Failure-aware simulation with drift and sensor degradation
-state = run_failure_simulation(steps=50)
-for entry in state.logs[-5:]:
-    print(entry["decision"], entry["confidence"], entry["signals"])
+# Run with SQLite persistence and live dashboard
+with EventStore("session.db") as store:
+    config = SimConfig(
+        steps=100,
+        enable_failures=True,
+        enable_zones=True,
+        enable_dashboard=True,
+        store=store,
+    )
+    result = run_unified_simulation(config=config, zone_map=zone_map)
+    print(show_summary(store))
 ```
 
 ## Package Structure
@@ -47,11 +60,14 @@ src/haas/
 ├── entities.py      # Human, Machine, AIController dataclasses
 ├── risk.py          # Dynamic risk computation
 ├── control.py       # Multi-layer control decisions and alerts
+├── zones.py         # Green/yellow/red geofencing with speed limits
 ├── failures.py      # Failure injection, detection, FMEA data
 ├── telemetry.py     # Sovereign Black Box — immutable logging
+├── store.py         # SQLite persistence (events, signals, system state)
 ├── handshake.py     # FELTSensor handshake protocol
-├── event_log.py     # Event logging for feedback loops
-└── simulation.py    # Basic and failure-aware simulation runners
+├── event_log.py     # In-memory event log for feedback loops
+├── dashboard.py     # Terminal dashboard with color-coded risk/confidence bars
+└── simulation.py    # Basic, failure-aware, and unified simulation runners
 ```
 
 ## Testing
@@ -59,6 +75,8 @@ src/haas/
 ```bash
 pytest
 ```
+
+72 tests covering all modules.
 
 ## Framework Specification
 

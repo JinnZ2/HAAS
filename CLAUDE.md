@@ -13,12 +13,15 @@ HAAS/
 │   ├── entities.py      # Human, Machine, AIController dataclasses
 │   ├── risk.py          # Dynamic risk computation
 │   ├── control.py       # Multi-layer control decisions and alerts
+│   ├── zones.py         # Green/yellow/red geofencing with speed limits
 │   ├── failures.py      # Failure injection, detection, FMEA table
 │   ├── telemetry.py     # Sovereign Black Box — immutable telemetry logging
+│   ├── store.py         # SQLite persistence (events, signals, system_state tables)
 │   ├── handshake.py     # FELTSensor handshake / micro-clarification protocol
-│   ├── event_log.py     # Append-only event log
-│   └── simulation.py    # Basic and failure-aware simulation runners
-├── tests/               # pytest test suite (46 tests)
+│   ├── event_log.py     # In-memory append-only event log
+│   ├── dashboard.py     # Terminal dashboard with ANSI color bars and session summary
+│   └── simulation.py    # Basic, failure-aware, and unified simulation runners
+├── tests/               # pytest test suite (72 tests)
 ├── Framework.md         # Full framework specification (~1250 lines)
 ├── pyproject.toml       # Package config (setuptools, numpy dep, pytest)
 ├── LICENSE              # CC0 1.0 Universal
@@ -28,9 +31,9 @@ HAAS/
 ## Commands
 
 ```bash
-pip install -e ".[dev]"  # Install with dev dependencies
-pytest                   # Run all tests
-pytest tests/test_risk.py -v  # Run a specific test file
+pip install -e ".[dev]"       # Install with dev dependencies
+pytest                        # Run all 72 tests
+pytest tests/test_zones.py -v # Run a specific test file
 ```
 
 ## Architecture
@@ -38,12 +41,35 @@ pytest tests/test_risk.py -v  # Run a specific test file
 The package follows a layered dependency graph with no circular imports:
 
 ```
-entities.py, event_log.py, failures.py, telemetry.py, handshake.py  (leaf modules)
+entities.py, event_log.py, failures.py, telemetry.py, handshake.py, zones.py, store.py
     ↑
 risk.py, control.py  (depend on entities)
     ↑
+dashboard.py  (depends on store)
+    ↑
 simulation.py  (integration layer — wires everything together)
 ```
+
+### Simulation Modes
+
+1. **Basic** (`run_basic_simulation`) — spatial entities, risk computation, AI control, event log
+2. **Failure-aware** (`run_failure_simulation`) — random risk, stochastic degradation, signal detection
+3. **Unified** (`run_unified_simulation`) — merges spatial + failures + zones + SQLite + dashboard
+
+The unified simulation runs: failure injection -> spatial risk -> zone classification -> failure signals -> control decision -> zone override -> speed enforcement -> entity movement -> alerts -> logging -> persistent storage -> dashboard render.
+
+### Zone System
+
+Three levels with strict priority: RED (full stop) > YELLOW (half speed) > GREEN (normal). Zones are axis-aligned rectangles. The most restrictive zone containing either the human or machine position wins.
+
+### Persistent Storage
+
+SQLite with three tables matching the Framework.md spec:
+- `events` — risk, confidence, decision, zone, positions, override flag
+- `signals` — boolean failure indicators per timestamp
+- `system_state` — mode, active controller, sensor noise, brake efficiency
+
+Query helpers: `near_miss_count()`, `override_count()`, `average_risk()`.
 
 ## Key Concepts
 
