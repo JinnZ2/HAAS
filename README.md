@@ -70,8 +70,62 @@ src/haas/
 ├── handshake.py     # FELTSensor handshake protocol
 ├── event_log.py     # In-memory event log for feedback loops
 ├── dashboard.py     # Terminal dashboard with risk/confidence/fatigue bars
-└── simulation.py    # Basic, failure-aware, and unified simulation runners
+├── simulation.py    # Basic, failure-aware, and unified simulation runners
+└── method.py        # Claim ledger — hypothesize, run, falsify, revise, rerun
 ```
+
+## The Claim Ledger
+
+Every threshold in this framework is a hypothesis: that fatigue amplifies risk
+by 5% per point, that 0.7 is the right place to brake. `method.py` holds them
+to account and records what happened, so a later session reads what was already
+tried instead of re-deriving it.
+
+```python
+from haas import Inquiry, Prediction, SimConfig, metrics_from_result, run_unified_simulation
+
+inquiry = Inquiry.load("inquiry.json")
+
+claim = inquiry.hypothesize(
+    "collapse-bound operators get a protective stop",
+    [Prediction("stop_fraction", ">", 0.0)],
+    sources=["Framework.md:39"],
+)
+
+result = run_unified_simulation(SimConfig(steps=40, seed=99))
+run, evaluation = inquiry.run_and_evaluate(claim.id, metrics_from_result(result), seed=99)
+
+if evaluation.verdict.value == "falsified":
+    v2 = inquiry.revise(claim.id, statement="...", reason=f"falsified by {run.id}")
+
+print(inquiry.next_actions())   # what the cycle says to do next
+inquiry.save("inquiry.json")
+```
+
+Two rules, both borrowed from the Sovereign Black Box — an edited record is a
+record you cannot trust:
+
+- **Nothing is deleted.** A falsified claim is marked falsified and kept. It
+  stops the same dead idea from being re-proposed as new.
+- **Precedence carries.** A revision inherits its ancestor's lineage and
+  `first_stated` date. Editing a claim does not reset its priority date.
+
+Refutation is asymmetric: one failed prediction falsifies a claim, but no
+number of passing runs proves one — supported claims keep asking to be rerun.
+Runs carry their seed and config, because an observation that cannot be
+reproduced cannot be disputed.
+
+`inquiry.json` at the repository root is the live ledger. What it currently
+says: energy collapse never reaches `control_decision` — it surfaces as
+protection-matrix violations while the machine keeps moving.
+
+## Legacy
+
+[`legacy/`](legacy/README.md) holds superseded artifacts — the prototypes that
+were embedded in `Framework.md` before the package existed. Nothing there is
+deleted and nothing there loses its priority date. The ledger in that README
+records what replaced each artifact and whether it was refined, extended, or
+falsified.
 
 ## Testing
 
@@ -79,7 +133,7 @@ src/haas/
 pytest
 ```
 
-148 tests covering all modules.
+200 tests covering all modules.
 
 ## Companion Project
 

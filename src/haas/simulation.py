@@ -79,8 +79,14 @@ def simulate_failure_step(state: SystemState) -> dict[str, Any]:
     return entry
 
 
-def run_failure_simulation(steps: int = 50) -> SystemState:
-    """Run the failure-aware simulation and return the final state."""
+def run_failure_simulation(steps: int = 50, seed: int | None = None) -> SystemState:
+    """Run the failure-aware simulation and return the final state.
+
+    Pass a seed to make the run reproducible — a claim tested against a
+    stochastic run can only be disputed if the run can be repeated.
+    """
+    if seed is not None:
+        random.seed(seed)
     state = SystemState()
     for _ in range(steps):
         simulate_failure_step(state)
@@ -102,6 +108,7 @@ class SimConfig:
     enable_dashboard: bool = False
     dashboard_delay: float = 0.15
     store: EventStore | None = None
+    seed: int | None = None  # set for reproducible runs — required to rerun a claim
 
 
 @dataclass
@@ -130,7 +137,7 @@ def unified_step(
     pstate: ProtectionState | None = None,
     institutional_friction: float = 0.0,
     energy_state: HumanEnergyState | None = None,
-) -> DashboardSnapshot:
+) -> tuple[DashboardSnapshot, list[Violation]]:
     """Run one unified step: spatial risk + failure injection + zones + energy + protections + logging."""
     ts = time.time()
 
@@ -327,6 +334,10 @@ def run_unified_simulation(
     Optionally displays a live terminal dashboard and persists to SQLite.
     """
     cfg = config or SimConfig()
+
+    if cfg.seed is not None:
+        random.seed(cfg.seed)
+        np.random.seed(cfg.seed)
 
     h = human or Human("H1", np.array([0.0, 0.0]), np.array([0.1, 0.0]))
     m = machine or Machine("F1", np.array([5.0, 0.0]), np.array([-0.5, 0.0]), max_speed=1.0)

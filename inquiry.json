@@ -1,0 +1,365 @@
+{
+  "name": "haas-q",
+  "claims": [
+    {
+      "id": "C1v1",
+      "lineage_id": "C1",
+      "statement": "Risk is fully described by relative velocity, distance, and latency: Risk = (v_rel / d) * (1 + latency)",
+      "predictions": [],
+      "version": 1,
+      "status": "superseded",
+      "first_stated": 1775530187,
+      "stated_at": 1775530187,
+      "supersedes": null,
+      "superseded_by": "C1v2",
+      "sources": [
+        "Framework.md:53",
+        "legacy/prototypes/v0_1_control_prototype.py"
+      ],
+      "rationale": "Original risk equation as first stated."
+    },
+    {
+      "id": "C1v2",
+      "lineage_id": "C1",
+      "statement": "Risk = (v_rel / d) * (1 + latency) * (1 + 0.05 * fatigue_score) \u2014 evasion is metabolic, so the operator's energy state is a risk term",
+      "predictions": [],
+      "version": 2,
+      "status": "proposed",
+      "first_stated": 1775530187,
+      "stated_at": 1775568214,
+      "supersedes": "C1v1",
+      "superseded_by": null,
+      "sources": [
+        "src/haas/risk.py",
+        "src/haas/energy.py",
+        "legacy/README.md#F-2"
+      ],
+      "rationale": "Incomplete, not wrong: the original is the fatigue = 0 case. Two operators at identical distance and closing speed are not at identical risk if one is eleven hours into a shift. See legacy/README.md F-2."
+    },
+    {
+      "id": "C2v1",
+      "lineage_id": "C2",
+      "statement": "Uniform random risk is an adequate stand-in for spatial risk when exercising the failure-detection loop",
+      "predictions": [],
+      "version": 1,
+      "status": "retired",
+      "first_stated": 1775530187,
+      "stated_at": 1775530187,
+      "supersedes": null,
+      "superseded_by": null,
+      "sources": [
+        "Framework.md:882",
+        "legacy/prototypes/v0_2_failure_aware.py"
+      ],
+      "rationale": "Falsified by analysis during extraction (896a12b), not by a run: random risk is independent of position, so braking cannot lower the risk it braked against and the loop never closes. run_failure_simulation is kept as a plumbing test. See legacy/README.md F-1."
+    },
+    {
+      "id": "C3v1",
+      "lineage_id": "C3",
+      "statement": "A run that drives the operator toward energy collapse produces at least one protective stop",
+      "predictions": [
+        {
+          "metric": "stop_fraction",
+          "op": ">",
+          "value": 0.0,
+          "tolerance": 0.0
+        }
+      ],
+      "version": 1,
+      "status": "superseded",
+      "first_stated": 1786699492.6279666,
+      "stated_at": 1786699492.6279666,
+      "supersedes": null,
+      "superseded_by": "C3v2",
+      "sources": [
+        "Framework.md:39",
+        "src/haas/energy.py",
+        "src/haas/control.py"
+      ],
+      "rationale": "If collapse is a first-class safety signal, it should reach the control decision."
+    },
+    {
+      "id": "C3v2",
+      "lineage_id": "C3",
+      "statement": "Energy collapse is caught by the protection matrix, not by the controller \u2014 it surfaces as critical violations while the machine keeps moving",
+      "predictions": [
+        {
+          "metric": "critical_violation_count",
+          "op": ">",
+          "value": 0.0,
+          "tolerance": 0.0
+        }
+      ],
+      "version": 2,
+      "status": "supported",
+      "first_stated": 1786699492.6279666,
+      "stated_at": 1786699492.640664,
+      "supersedes": "C3v1",
+      "superseded_by": null,
+      "sources": [
+        "Framework.md:39",
+        "src/haas/energy.py",
+        "src/haas/control.py"
+      ],
+      "rationale": "Falsified by R1: collapse_distance 0.134 with stop_fraction 0.0. There is no path from collapse_distance to control_decision."
+    }
+  ],
+  "runs": [
+    {
+      "id": "R1",
+      "claim_id": "C3v1",
+      "metrics": {
+        "steps": 40.0,
+        "mean_risk": 0.1861907440658565,
+        "max_risk": 0.2965037593984955,
+        "final_risk": 0.2965037593984955,
+        "mean_confidence": 0.7550000000000003,
+        "stop_fraction": 0.0,
+        "slow_fraction": 0.0,
+        "move_fraction": 1.0,
+        "near_miss_count": 0.0,
+        "alert_count": 0.0,
+        "compound_risk_steps": 0.0,
+        "violation_count": 4.0,
+        "critical_violation_count": 4.0,
+        "final_sensor_noise": 0.4,
+        "final_brake_efficiency": 0.8,
+        "fatigue_score": 3.9,
+        "collapse_distance": 0.134,
+        "cumulative_ai_tax": 0.0,
+        "false_alert_total": 0.0
+      },
+      "config": {
+        "steps": 40,
+        "enable_zones": false
+      },
+      "seed": 99,
+      "notes": "",
+      "timestamp": 1786699492.640529
+    },
+    {
+      "id": "R2",
+      "claim_id": "C3v2",
+      "metrics": {
+        "steps": 40.0,
+        "mean_risk": 0.14097852183119677,
+        "max_risk": 0.25445783132530087,
+        "final_risk": 0.05140186915887844,
+        "mean_confidence": 0.5274999999999997,
+        "stop_fraction": 0.3,
+        "slow_fraction": 0.0,
+        "move_fraction": 0.7,
+        "near_miss_count": 0.0,
+        "alert_count": 17.0,
+        "compound_risk_steps": 0.0,
+        "violation_count": 46.0,
+        "critical_violation_count": 23.0,
+        "final_sensor_noise": 0.7,
+        "final_brake_efficiency": 0.9,
+        "fatigue_score": 10.0,
+        "collapse_distance": 0.0,
+        "cumulative_ai_tax": 13.599999999999998,
+        "false_alert_total": 17.0
+      },
+      "config": {
+        "steps": 40,
+        "enable_zones": false
+      },
+      "seed": 7,
+      "notes": "",
+      "timestamp": 1786699492.6424012
+    },
+    {
+      "id": "R3",
+      "claim_id": "C3v2",
+      "metrics": {
+        "steps": 40.0,
+        "mean_risk": 0.1391545454006963,
+        "max_risk": 0.26141566265060207,
+        "final_risk": 0.05140186915887844,
+        "mean_confidence": 0.5675000000000001,
+        "stop_fraction": 0.3,
+        "slow_fraction": 0.0,
+        "move_fraction": 0.7,
+        "near_miss_count": 0.0,
+        "alert_count": 22.0,
+        "compound_risk_steps": 0.0,
+        "violation_count": 41.0,
+        "critical_violation_count": 15.0,
+        "final_sensor_noise": 0.6,
+        "final_brake_efficiency": 0.8,
+        "fatigue_score": 10.0,
+        "collapse_distance": 0.0,
+        "cumulative_ai_tax": 17.599999999999998,
+        "false_alert_total": 22.0
+      },
+      "config": {
+        "steps": 40,
+        "enable_zones": false
+      },
+      "seed": 11,
+      "notes": "",
+      "timestamp": 1786699492.6439826
+    },
+    {
+      "id": "R4",
+      "claim_id": "C3v2",
+      "metrics": {
+        "steps": 40.0,
+        "mean_risk": 0.1861907440658565,
+        "max_risk": 0.2965037593984955,
+        "final_risk": 0.2965037593984955,
+        "mean_confidence": 0.7550000000000003,
+        "stop_fraction": 0.0,
+        "slow_fraction": 0.0,
+        "move_fraction": 1.0,
+        "near_miss_count": 0.0,
+        "alert_count": 0.0,
+        "compound_risk_steps": 0.0,
+        "violation_count": 4.0,
+        "critical_violation_count": 4.0,
+        "final_sensor_noise": 0.4,
+        "final_brake_efficiency": 0.8,
+        "fatigue_score": 3.9,
+        "collapse_distance": 0.134,
+        "cumulative_ai_tax": 0.0,
+        "false_alert_total": 0.0
+      },
+      "config": {
+        "steps": 40,
+        "enable_zones": false
+      },
+      "seed": 99,
+      "notes": "",
+      "timestamp": 1786699492.6454124
+    }
+  ],
+  "evaluations": [
+    {
+      "run_id": "R1",
+      "claim_id": "C3v1",
+      "verdict": "falsified",
+      "results": [
+        {
+          "prediction": {
+            "metric": "stop_fraction",
+            "op": ">",
+            "value": 0.0,
+            "tolerance": 0.0
+          },
+          "observed": 0.0,
+          "verdict": "falsified"
+        }
+      ],
+      "timestamp": 1786699492.640535
+    },
+    {
+      "run_id": "R2",
+      "claim_id": "C3v2",
+      "verdict": "supported",
+      "results": [
+        {
+          "prediction": {
+            "metric": "critical_violation_count",
+            "op": ">",
+            "value": 0.0,
+            "tolerance": 0.0
+          },
+          "observed": 23.0,
+          "verdict": "supported"
+        }
+      ],
+      "timestamp": 1786699492.642405
+    },
+    {
+      "run_id": "R3",
+      "claim_id": "C3v2",
+      "verdict": "supported",
+      "results": [
+        {
+          "prediction": {
+            "metric": "critical_violation_count",
+            "op": ">",
+            "value": 0.0,
+            "tolerance": 0.0
+          },
+          "observed": 15.0,
+          "verdict": "supported"
+        }
+      ],
+      "timestamp": 1786699492.643986
+    },
+    {
+      "run_id": "R4",
+      "claim_id": "C3v2",
+      "verdict": "supported",
+      "results": [
+        {
+          "prediction": {
+            "metric": "critical_violation_count",
+            "op": ">",
+            "value": 0.0,
+            "tolerance": 0.0
+          },
+          "observed": 4.0,
+          "verdict": "supported"
+        }
+      ],
+      "timestamp": 1786699492.6454158
+    }
+  ],
+  "unknowns": [
+    {
+      "id": "U1",
+      "question": "Is the 0.05 fatigue coefficient (1.5x at maximum fatigue) the right magnitude? No run in this repository can falsify it \u2014 the simulation generates fatigue from the same model that consumes it. Needs field data.",
+      "raised_by": "C1",
+      "status": "open",
+      "probe": {},
+      "resolution": "",
+      "raised_at": 1775568214,
+      "resolved_at": null
+    },
+    {
+      "id": "U2",
+      "question": "inject_failures degrades the system independently of what the machine is doing. Real brake wear is a function of braking and real sensor noise is a function of the environment driven into. Should degradation be coupled to the control decisions?",
+      "raised_by": "C2v1",
+      "status": "open",
+      "probe": {
+        "couple_degradation_to_decisions": true
+      },
+      "resolution": "",
+      "raised_at": 1775566266,
+      "resolved_at": null
+    },
+    {
+      "id": "U3",
+      "question": "Should collapse_distance feed control_decision directly? Stops do occur at some seeds (0.3 at seed 7) but they come from confidence loss, not from collapse. The controller cannot currently distinguish a rested operator from a collapsing one.",
+      "raised_by": "R1",
+      "status": "open",
+      "probe": {
+        "seed": 7,
+        "add": "collapse_distance to control_decision"
+      },
+      "resolution": "",
+      "raised_at": 1786699492.645455,
+      "resolved_at": null
+    },
+    {
+      "id": "U4",
+      "question": "The 40-step default run reaches full collapse (collapse_distance 0.0) at seeds 7 and 11. Is the fatigue accumulation rate realistic for a 40-step horizon, or is the model collapsing operators far too fast?",
+      "raised_by": "R1",
+      "status": "open",
+      "probe": {
+        "steps": 400
+      },
+      "resolution": "",
+      "raised_at": 1786699492.6454613,
+      "resolved_at": null
+    }
+  ],
+  "counters": {
+    "lineage": 3,
+    "run": 4,
+    "unknown": 4
+  }
+}

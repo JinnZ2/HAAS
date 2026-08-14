@@ -1247,3 +1247,50 @@ def trigger_micro_clarification_prompt():
 2.	Friction Displacement: Currently, your husband carries the "Anxiety" (prediction error). This protocol displaces the friction onto the supervisors. If they don't do their safety checks, the machines slow down, hitting their productivity KPIs.
 3.	The Receipts: Every time a "Micro-Clarification" is triggered and ignored/overridden by a manager, it is logged in the Sovereign Black Box.
 
+
+⸻
+
+13. Claim Ledger (HAAS-Q Extension v0.4)
+
+Every threshold in this framework is a hypothesis wearing a number. Risk > 0.7 stops the machine. Fatigue amplifies risk by 5% per point. Confidence below 0.5 is untrustworthy. None of those were measured. They were asserted, and then they were implemented, which makes them look measured.
+
+The same institutional failure the framework was built to resist applies to the framework itself: a number that was guessed once and never revisited becomes policy, and policy becomes "the standard," and nobody can say where it came from. That is Safety Theater with a git history.
+
+13.1 The Cycle
+
+hypothesize → run → observe → falsified? → edit the claim → search for unknowns → rerun
+
+The loop does not terminate. A claim that survives is corroborated, not proven, and goes back in the queue for another run.
+
+13.2 Ledger Requirements
+
+The system must record:
+	•	Claim — a statement plus at least one falsifiable prediction over a measurable observable
+	•	Run — metrics, configuration, and seed. A run that cannot be repeated cannot be disputed
+	•	Verdict — per prediction, then aggregated
+	•	Revision — the edited claim, linked to what it superseded and why
+	•	Unknown — the question the failure exposed, and the probe that would investigate it
+
+13.3 Rules
+
+	1.	Nothing is deleted. A falsified claim is marked falsified and retained. Deleting it means the same dead idea returns as a new proposal. This is the append-only rule of the Sovereign Black Box (Section 10.4) applied to the framework's own reasoning.
+	2.	Precedence carries. A revision inherits its ancestor's priority date. The idea was first stated when it was first stated; editing it does not reset the clock. Applies equally to superseded code (see legacy/).
+	3.	Refutation is asymmetric. One failed prediction falsifies a claim. No number of passing runs proves one.
+	4.	An unmeasured prediction is not a pass. If the run never reported the metric, the verdict is inconclusive and the gap in instrumentation is itself logged as an unknown.
+	5.	A claim with no prediction is not a finding. If no run could contradict it, it is an opinion.
+
+13.4 Failure Mode: Claim Drift
+
+A framework whose numbers change without a recorded reason has the same pathology as a vendor pushing firmware without a shadow run (Section 11.1). The ledger is the change control for the framework's own assumptions.
+
+Observable signal: a threshold in the code with no corresponding claim in the ledger.
+Control strategy: changing a threshold requires a claim, a run, and a verdict.
+
+13.5 Implementation
+
+src/haas/method.py — Inquiry, Claim, Prediction, RunRecord, Evaluation, Unknown. Persists to JSON; inquiry.json at the repository root is the live ledger.
+
+Currently open, from real runs:
+	•	The 0.05 fatigue coefficient cannot be falsified by this repository — the simulation generates fatigue from the same model that consumes it. Needs field data.
+	•	Energy collapse never reaches control_decision. A collapsing operator produces critical protection violations while the machine keeps moving. Stops that do occur come from confidence loss, not from collapse.
+	•	inject_failures degrades the system independently of what the machine is doing. Real brake wear is a function of braking.
