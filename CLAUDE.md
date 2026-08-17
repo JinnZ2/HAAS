@@ -25,9 +25,14 @@ HAAS/
 │   ├── audit.py         # Internal audit — compliance scoring against protection matrix
 │   ├── event_log.py     # In-memory append-only event log
 │   ├── dashboard.py     # Terminal dashboard with risk/confidence/fatigue bars
-│   └── simulation.py    # Basic, failure-aware, and unified simulation runners
-├── tests/               # pytest test suite (148 tests)
-├── Framework.md         # Full framework specification (~1250 lines)
+│   ├── simulation.py    # Basic, failure-aware, and unified simulation runners
+│   └── method.py        # Claim ledger — hypothesize, run, falsify, revise, rerun
+├── tests/               # pytest test suite (200 tests)
+├── legacy/              # Superseded artifacts — kept, never deleted
+│   ├── README.md        # Precedence doctrine + supersession ledger
+│   └── prototypes/      # Verbatim prototype code extracted from Framework.md
+├── Framework.md         # Full framework specification (~1300 lines)
+├── inquiry.json         # Live claim ledger — open claims, falsifications, unknowns
 ├── pyproject.toml       # Package config (setuptools, numpy dep, pytest)
 ├── LICENSE              # CC0 1.0 Universal
 └── README.md            # Project README
@@ -37,8 +42,9 @@ HAAS/
 
 ```bash
 pip install -e ".[dev]"       # Install with dev dependencies
-pytest                        # Run all 148 tests
+pytest                        # Run all 200 tests
 pytest tests/test_energy.py -v # Run a specific test file
+python -c "from haas import Inquiry; print(Inquiry.load('inquiry.json').format_ledger())"
 ```
 
 ## Architecture
@@ -51,6 +57,8 @@ risk.py, control.py  (depend on entities; risk uses fatigue from energy)
 dashboard.py  (depends on store)
     ↑
 simulation.py  (integration layer — wires everything together)
+    ↑
+method.py  (claim ledger — turns runs into verdicts; imports simulation/store for typing only)
 ```
 
 ### Simulation Modes
@@ -92,6 +100,41 @@ Five entities — Human, AI, Automation, Institution, Company — each protected
 
 Scores compliance across all threats on three dimensions (0-3 each): control exists, signal monitored, enforcement proof. Generates per-pair scores, per-entity scores, gap analysis, heatmap matrix, and maturity rating.
 
+### Claim Ledger (method.py)
+
+The scientific method as code: hypothesize → run → observe → falsified? → edit
+the claim → search for unknowns → rerun. `Inquiry` is an append-only ledger of
+`Claim`s (versioned), `RunRecord`s (with seed and config, so a run can be
+repeated), `Evaluation`s, and `Unknown`s. It persists to JSON — `inquiry.json`
+at the repository root is the live one.
+
+Rules that are not negotiable, for the same reason the black box is append-only:
+
+- **Nothing is deleted.** Falsified claims are marked, not removed. `revise()`
+  supersedes; it never overwrites.
+- **Precedence carries.** A revision inherits `lineage_id` and `first_stated`
+  from its ancestor. Editing a claim never resets its priority date.
+- **Refutation is asymmetric.** One failed prediction falsifies; no number of
+  passing runs proves. Supported claims keep appearing in `next_actions()`
+  until they clear `MIN_CORROBORATING_RUNS`, and never stop being falsifiable.
+- **An unmeasured prediction is INCONCLUSIVE, not a pass**, and automatically
+  raises an `Unknown` naming the missing metric.
+- **A claim with no predictions can never be supported** — `next_actions()`
+  flags it as unfalsifiable.
+
+`metrics_from_result()` / `metrics_from_store()` turn a run into the observables
+predictions are written against. Set `SimConfig.seed` for any run that will be
+used as evidence.
+
+### Legacy Folder
+
+`legacy/` holds superseded artifacts — currently the prototype code that was
+embedded in `Framework.md` before the package was extracted. Same doctrine as
+the ledger: nothing is deleted, precedence carries, and the fate of each
+artifact (refined / extended / falsified) is recorded in `legacy/README.md`.
+Archived files are kept verbatim with a provenance header; do not tidy them up,
+and do not fix bugs there — fix them in the superseding module.
+
 ### Persistent Storage
 
 SQLite with four tables: `events`, `signals`, `system_state`, `violations`.
@@ -111,6 +154,9 @@ Query helpers: `near_miss_count()`, `override_count()`, `average_risk()`, `viola
 ## Development Guidelines
 
 - Safety logic must be correct first — changes to thresholds and control decisions are deliberate
+- Thresholds are claims. Changing one means recording it in `inquiry.json`: what was
+  claimed, which run falsified it, what the edited claim is, what unknowns it exposed
+- Superseded code goes to `legacy/` with a provenance header and a ledger row — never deleted
 - All magic numbers are named constants
 - Functions return values instead of printing — testable and composable
 - Framework.md is the specification; code implements it — keep them aligned
